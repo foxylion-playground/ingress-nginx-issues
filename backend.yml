@@ -12,14 +12,14 @@ spec:
       terminationGracePeriodSeconds: 30
       containers:
       - name: backend
-        image: gcr.io/google_containers/echoserver:1.4
+        image: foxylion/httpstatuscode
         imagePullPolicy: Always
         livenessProbe:
           httpGet:
             path: /
-            port: 8080
+            port: 80
         ports:
-        - containerPort: 8080
+        - containerPort: 80
           protocol: TCP
 ---
 kind: Service
@@ -29,7 +29,7 @@ metadata:
 spec:
   ports:
   - port: 80
-    targetPort: 8080
+    targetPort: 80
   selector:
     app: backend
 ---
