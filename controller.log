@@ -1,0 +1,540 @@
+I0907 14:14:43.350674      12 launch.go:109] &{NGINX 0.9.0-beta.12 git-cda42f9 https://github.com/kubernetes/ingress}
+I0907 14:14:43.350746      12 launch.go:112] Watching for ingress class: nginx
+I0907 14:14:43.350899      12 launch.go:278] Creating API client for https://10.0.0.1:443
+I0907 14:14:43.372982      12 launch.go:291] Running in Kubernetes Cluster version v1.5 (v1.5.3) - git (clean) commit 029c3a408176b55c30846f0faedf56aae5992e9b - platform linux/amd64
+I0907 14:14:43.374492      12 launch.go:131] validated default/default-http-backend as the default backend
+I0907 14:14:43.378709      12 nginx.go:192] starting NGINX process...
+I0907 14:14:43.379409      12 controller.go:1350] starting Ingress controller
+I0907 14:14:43.386803      12 event.go:218] Event(v1.ObjectReference{Kind:"Ingress", Namespace:"default", Name:"backend", UID:"9717d320-93d6-11e7-9b2a-080027f2d238", APIVersion:"extensions", ResourceVersion:"121", FieldPath:""}): type: 'Normal' reason: 'CREATE' Ingress default/backend
+I0907 14:14:43.386865      12 controller.go:279] adding configmap default/nginx-custom-configuration to backend
+W0907 14:14:43.718705      12 controller.go:1041] service default/backend does not have any active endpoints
+I0907 14:14:43.718798      12 leaderelection.go:174] attempting to acquire leader lease...
+I0907 14:14:43.718885      12 controller.go:469] backend reload required
+I0907 14:14:43.719129      12 status.go:152] skipping Ingress status update (I am not the current leader)
+I0907 14:14:43.719031      12 metrics.go:34] changing prometheus collector from  to default
+I0907 14:14:43.723222      12 leaderelection.go:184] successfully acquired lease default/ingress-controller-leader-nginx
+I0907 14:14:43.723319      12 status.go:171] new leader elected (nginx-ingress-controller-1220482501-11hr3)
+I0907 14:14:43.723337      12 status.go:173] I am the new status update leader
+I0907 14:14:43.747408      12 nginx.go:310] NGINX configuration diff
+I0907 14:14:43.747436      12 nginx.go:311] --- /tmp/a093640033	2017-09-07 14:14:43.745596633 +0000
++++ /tmp/b574729548	2017-09-07 14:14:43.745596633 +0000
+@@ -1,6 +1,382 @@
+-# A very simple nginx configuration file that forces nginx to start.
++daemon off;
++
++worker_processes 2;
+ pid /run/nginx.pid;
+ 
+-events {}
+-http {}
+-daemon off;
+\ No newline at end of file
++worker_rlimit_nofile 31744;
++worker_shutdown_timeout 10s ;
++
++events {
++    multi_accept        on;
++    worker_connections  16384;
++    use                 epoll;
++}
++
++http {
++    real_ip_header      X-Forwarded-For;
++
++    real_ip_recursive   on;
++    set_real_ip_from    0.0.0.0/0;
++
++    geoip_country       /etc/nginx/GeoIP.dat;
++    geoip_city          /etc/nginx/GeoLiteCity.dat;
++    geoip_proxy_recursive on;
++    sendfile            on;
++    aio                 threads;
++    tcp_nopush          on;
++    tcp_nodelay         on;
++
++    log_subrequest      on;
++
++    reset_timedout_connection on;
++
++    keepalive_timeout  75s;
++    keepalive_requests 100;
++
++    client_header_buffer_size       1k;
++    client_header_timeout           60s;
++    large_client_header_buffers     4 8k;
++    client_body_buffer_size         8k;
++    client_body_timeout             60s;
++
++    http2_max_field_size            4k;
++    http2_max_header_size           16k;
++
++    types_hash_max_size             2048;
++    server_names_hash_max_size      1024;
++    server_names_hash_bucket_size   32;
++    map_hash_bucket_size            64;
++
++    proxy_headers_hash_max_size     512;
++    proxy_headers_hash_bucket_size  64;
++
++    variables_hash_bucket_size      64;
++    variables_hash_max_size         2048;
++
++    underscores_in_headers          off;
++    ignore_invalid_headers          on;
++
++    include /etc/nginx/mime.types;
++    default_type text/html;
++    gzip on;
++    gzip_comp_level 5;
++    gzip_http_version 1.1;
++    gzip_min_length 256;
++    gzip_types application/atom+xml application/javascript application/x-javascript application/json application/rss+xml application/vnd.ms-fontobject application/x-font-ttf application/x-web-app-manifest+json application/xhtml+xml application/xml font/opentype image/svg+xml image/x-icon text/css text/plain text/x-component;
++    gzip_proxied any;
++
++    # Custom headers for response
++
++    server_tokens on;
++
++    # disable warnings
++    uninitialized_variable_warn off;
++
++    # Additional available variables:
++    # $namespace
++    # $ingress_name
++    # $service_name
++    log_format upstreaminfo '$the_real_ip - [$the_real_ip] - $remote_user [$time_local] "$request" $status $body_bytes_sent "$http_referer" "$http_user_agent" $request_length $request_time [$proxy_upstream_name] $upstream_addr $upstream_response_length $upstream_response_time $upstream_status';
++
++    map $request_uri $loggable {
++        default 1;
++    }
++
++    access_log /var/log/nginx/access.log upstreaminfo if=$loggable;
++    error_log  /var/log/nginx/error.log notice;
++
++    resolver 10.0.0.10 valid=30s;
++
++    # Retain the default nginx handling of requests without a "Connection" header
++    map $http_upgrade $connection_upgrade {
++        default          upgrade;
++        ''               close;
++    }
++
++    # trust http_x_forwarded_proto headers correctly indicate ssl offloading
++    map $http_x_forwarded_proto $pass_access_scheme {
++        default          $http_x_forwarded_proto;
++        ''               $scheme;
++    }
++
++    map $http_x_forwarded_port $pass_server_port {
++       default           $http_x_forwarded_port;
++       ''                $server_port;
++    }
++
++    map $http_x_forwarded_for $the_real_ip {
++        default          $http_x_forwarded_for;
++        ''               $realip_remote_addr;
++    }
++
++    map $pass_server_port $pass_port {
++        443              443;
++        default          $pass_server_port;
++    }
++
++    # Map a response error watching the header Content-Type
++    map $http_accept $httpAccept {
++        default          html;
++        application/json json;
++        application/xml  xml;
++        text/plain       text;
++    }
++
++    map $httpAccept $httpReturnType {
++        default          text/html;
++        json             application/json;
++        xml              application/xml;
++        text             text/plain;
++    }
++
++    # Obtain best http host
++    map $http_host $this_host {
++        default          $http_host;
++        ''               $host;
++    }
++
++    map $http_x_forwarded_host $best_http_host {
++        default          $http_x_forwarded_host;
++        ''               $this_host;
++    }
++
++    server_name_in_redirect off;
++    port_in_redirect        off;
++
++    ssl_protocols TLSv1 TLSv1.1 TLSv1.2;
++
++    # turn on session caching to drastically improve performance
++    ssl_session_cache builtin:1000 shared:SSL:10m;
++    ssl_session_timeout 10m;
++
++    # allow configuring ssl session tickets
++    ssl_session_tickets on;
++
++    # slightly reduce the time-to-first-byte
++    ssl_buffer_size 4k;
++
++    # allow configuring custom ssl ciphers
++    ssl_ciphers 'ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:kEDH+AESGCM:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:DHE-DSS-AES256-SHA:DHE-RSA-AES256-SHA:AES128-GCM-SHA256:AES256-GCM-SHA384:AES128-SHA256:AES256-SHA256:AES128-SHA:AES256-SHA:AES:CAMELLIA:DES-CBC3-SHA:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK:!aECDH:!EDH-DSS-DES-CBC3-SHA:!EDH-RSA-DES-CBC3-SHA:!KRB5-DES-CBC3-SHA';
++    ssl_prefer_server_ciphers on;
++
++    ssl_ecdh_curve secp384r1;
++
++    proxy_ssl_session_reuse on;
++
++    upstream upstream-default-backend {
++        # Load balance algorithm; empty for round robin, which is the default
++        least_conn;
++        server 172.17.0.5:8080 max_fails=0 fail_timeout=0;
++    }
++    server {
++        server_name _;
++        listen 80 default_server reuseport backlog=511;
++        listen [::]:80 default_server reuseport backlog=511;
++        set $proxy_upstream_name "-";
++
++        listen 443  default_server reuseport backlog=511 ssl http2;
++        listen [::]:443  default_server reuseport backlog=511 ssl http2;
++        # PEM sha: 503da423cbbc563fb710e8a9d47673dbe2d30dc8
++        ssl_certificate                         /ingress-controller/ssl/default-fake-certificate.pem;
++        ssl_certificate_key                     /ingress-controller/ssl/default-fake-certificate.pem;
++
++        more_set_headers                        "Strict-Transport-Security: max-age=15724800; includeSubDomains;";
++        location / {
++            set $proxy_upstream_name "upstream-default-backend";
++
++            set $namespace      "";
++            set $ingress_name   "";
++            set $service_name   "";
++
++            port_in_redirect off;
++
++            client_max_body_size                    "1m";
++
++            proxy_set_header Host                   $best_http_host;
++
++            # Pass the extracted client certificate to the backend
++
++            # Allow websocket connections
++            proxy_set_header                        Upgrade           $http_upgrade;
++            proxy_set_header                        Connection        $connection_upgrade;
++
++            proxy_set_header X-Real-IP              $the_real_ip;
++            proxy_set_header X-Forwarded-For        $the_real_ip;
++            proxy_set_header X-Forwarded-Host       $best_http_host;
++            proxy_set_header X-Forwarded-Port       $pass_port;
++            proxy_set_header X-Forwarded-Proto      $pass_access_scheme;
++            proxy_set_header X-Original-URI         $request_uri;
++            proxy_set_header X-Scheme               $pass_access_scheme;
++
++            # mitigate HTTPoxy Vulnerability
++            # https://www.nginx.com/blog/mitigating-the-httpoxy-vulnerability-with-nginx/
++            proxy_set_header Proxy                  "";
++
++            # Custom headers to proxied server
++
++            proxy_connect_timeout                   5s;
++            proxy_send_timeout                      60s;
++            proxy_read_timeout                      120s;
++
++            proxy_redirect                          off;
++            proxy_buffering                         off;
++            proxy_buffer_size                       "4k";
++            proxy_buffers                           4 "4k";
++
++            proxy_http_version                      1.1;
++
++            proxy_cookie_domain                     off;
++            proxy_cookie_path                       off;
++
++            # In case of errors try the next upstream server before returning an error
++            proxy_next_upstream                     error timeout invalid_header http_502 http_503 http_504;
++            proxy_pass http://upstream-default-backend;
++        }
++
++        # health checks in cloud providers require the use of port 80
++        location /healthz {
++            access_log off;
++            return 200;
++        }
++
++        # this is required to avoid error if nginx is being monitored
++        # with an external software (like sysdig)
++        location /nginx_status {
++            allow 127.0.0.1;
++            allow ::1;
++            deny all;
++
++            access_log off;
++            stub_status on;
++        }
++
++        fastcgi_param       HTTP_X_Code             503;
++        fastcgi_param       HTTP_X_Format           $http_accept;
++        fastcgi_param       HTTP_X_Original_URI     $request_uri;
++        fastcgi_param       HTTP_X_Namespace        $namespace;
++        fastcgi_param       HTTP_X_Ingress_Name     $ingress_name;
++        fastcgi_param       HTTP_X_Service_Name     $service_name;
++        fastcgi_param       HTTP_X_Endpoints        172.17.0.5:8080;
++    }
++    server {
++        server_name backend.local;
++        listen 80;
++        listen [::]:80;
++        set $proxy_upstream_name "-";
++        location / {
++            set $proxy_upstream_name "upstream-default-backend";
++
++            set $namespace      "default";
++            set $ingress_name   "backend";
++            set $service_name   "backend";
++
++            port_in_redirect off;
++
++            client_max_body_size                    "1m";
++
++            proxy_set_header Host                   $best_http_host;
++
++            # Pass the extracted client certificate to the backend
++
++            # Allow websocket connections
++            proxy_set_header                        Upgrade           $http_upgrade;
++            proxy_set_header                        Connection        $connection_upgrade;
++
++            proxy_set_header X-Real-IP              $the_real_ip;
++            proxy_set_header X-Forwarded-For        $the_real_ip;
++            proxy_set_header X-Forwarded-Host       $best_http_host;
++            proxy_set_header X-Forwarded-Port       $pass_port;
++            proxy_set_header X-Forwarded-Proto      $pass_access_scheme;
++            proxy_set_header X-Original-URI         $request_uri;
++            proxy_set_header X-Scheme               $pass_access_scheme;
++
++            # mitigate HTTPoxy Vulnerability
++            # https://www.nginx.com/blog/mitigating-the-httpoxy-vulnerability-with-nginx/
++            proxy_set_header Proxy                  "";
++
++            # Custom headers to proxied server
++
++            proxy_connect_timeout                   5s;
++            proxy_send_timeout                      60s;
++            proxy_read_timeout                      120s;
++
++            proxy_redirect                          off;
++            proxy_buffering                         off;
++            proxy_buffer_size                       "4k";
++            proxy_buffers                           4 "4k";
++
++            proxy_http_version                      1.1;
++
++            proxy_cookie_domain                     off;
++            proxy_cookie_path                       off;
++
++            # In case of errors try the next upstream server before returning an error
++            proxy_next_upstream                     error timeout invalid_header http_502 http_503 http_504;
++            proxy_pass http://upstream-default-backend;
++        }
++
++        fastcgi_param       HTTP_X_Code             503;
++        fastcgi_param       HTTP_X_Format           $http_accept;
++        fastcgi_param       HTTP_X_Original_URI     $request_uri;
++        fastcgi_param       HTTP_X_Namespace        $namespace;
++        fastcgi_param       HTTP_X_Ingress_Name     $ingress_name;
++        fastcgi_param       HTTP_X_Service_Name     $service_name;
++        fastcgi_param       HTTP_X_Endpoints        172.17.0.5:8080;
++    }
++
++    # default server, used for NGINX healthcheck and access to nginx stats
++    server {
++        # Use the port 18080 (random value just to avoid known ports) as default port for nginx.
++        # Changing this value requires a change in:
++        # https://github.com/kubernetes/ingress/blob/master/controllers/nginx/pkg/cmd/controller/nginx.go
++        listen 127.0.0.1:18080 default_server reuseport backlog=511;
++        listen [::]:18080 default_server reuseport backlog=511;
++        set $proxy_upstream_name "-";
++
++        location /healthz {
++            access_log off;
++            return 200;
++        }
++
++        location /nginx_status {
++            set $proxy_upstream_name "internal";
++
++            access_log off;
++            stub_status on;
++        }
++
++        fastcgi_param       HTTP_X_Code             404;
++        fastcgi_param       HTTP_X_Format           $http_accept;
++        fastcgi_param       HTTP_X_Original_URI     $request_uri;
++        fastcgi_param       HTTP_X_Namespace        $namespace;
++        fastcgi_param       HTTP_X_Ingress_Name     $ingress_name;
++        fastcgi_param       HTTP_X_Service_Name     $service_name;
++        fastcgi_param       HTTP_X_Endpoints        172.17.0.5:8080;
++
++        location / {
++            set $proxy_upstream_name "upstream-default-backend";
++            proxy_pass               http://upstream-default-backend;
++        }
++
++        fastcgi_param       HTTP_X_Code             404;
++        fastcgi_param       HTTP_X_Format           $http_accept;
++        fastcgi_param       HTTP_X_Original_URI     $request_uri;
++        fastcgi_param       HTTP_X_Namespace        $namespace;
++        fastcgi_param       HTTP_X_Ingress_Name     $ingress_name;
++        fastcgi_param       HTTP_X_Service_Name     $service_name;
++        fastcgi_param       HTTP_X_Endpoints        172.17.0.5:8080;
++    }
++}
++
++stream {
++    log_format log_stream [$time_local] $protocol $status $bytes_sent $bytes_received $session_time;
++
++    access_log /var/log/nginx/access.log log_stream;
++
++    error_log  /var/log/nginx/error.log;
++
++    # TCP services
++
++    # UDP services
++}
++
+I0907 14:14:43.765537      12 controller.go:478] ingress backend successfully reloaded...
+W0907 14:14:46.708611      12 controller.go:1041] service default/backend does not have any active endpoints
+W0907 14:14:50.041785      12 controller.go:1041] service default/backend does not have any active endpoints
+W0907 14:14:53.375124      12 controller.go:1041] service default/backend does not have any active endpoints
+W0907 14:14:56.708449      12 controller.go:1041] service default/backend does not have any active endpoints
+W0907 14:15:00.041765      12 controller.go:1041] service default/backend does not have any active endpoints
+W0907 14:15:03.374883      12 controller.go:1041] service default/backend does not have any active endpoints
+W0907 14:15:06.708349      12 controller.go:1041] service default/backend does not have any active endpoints
+I0907 14:15:13.723852      12 status.go:350] updating Ingress default/backend status to [{192.168.99.100 }]
+W0907 14:15:13.726758      12 controller.go:1041] service default/backend does not have any active endpoints
+I0907 14:15:13.727021      12 event.go:218] Event(v1.ObjectReference{Kind:"Ingress", Namespace:"default", Name:"backend", UID:"9717d320-93d6-11e7-9b2a-080027f2d238", APIVersion:"extensions", ResourceVersion:"495", FieldPath:""}): type: 'Normal' reason: 'UPDATE' Ingress default/backend
+I0907 14:15:18.205816      12 controller.go:469] backend reload required
+I0907 14:15:18.247309      12 nginx.go:310] NGINX configuration diff
+I0907 14:15:18.247332      12 nginx.go:311] --- /tmp/a141778469	2017-09-07 14:15:18.241596633 +0000
++++ /tmp/b546970432	2017-09-07 14:15:18.241596633 +0000
+@@ -168,6 +168,11 @@
+         least_conn;
+         server 172.17.0.5:8080 max_fails=0 fail_timeout=0;
+     }
++    upstream default-backend-80 {
++        # Load balance algorithm; empty for round robin, which is the default
++        least_conn;
++        server 172.17.0.4:80 max_fails=0 fail_timeout=0;
++    }
+     server {
+         server_name _;
+         listen 80 default_server reuseport backlog=511;
+@@ -264,7 +269,7 @@
+         listen [::]:80;
+         set $proxy_upstream_name "-";
+         location / {
+-            set $proxy_upstream_name "upstream-default-backend";
++            set $proxy_upstream_name "default-backend-80";
+ 
+             set $namespace      "default";
+             set $ingress_name   "backend";
+@@ -312,7 +317,7 @@
+ 
+             # In case of errors try the next upstream server before returning an error
+             proxy_next_upstream                     error timeout invalid_header http_502 http_503 http_504;
+-            proxy_pass http://upstream-default-backend;
++            proxy_pass http://default-backend-80;
+         }
+ 
+         fastcgi_param       HTTP_X_Code             503;
+I0907 14:15:18.274193      12 controller.go:478] ingress backend successfully reloaded...
+W0907 14:15:23.228537      12 controller.go:1041] service default/backend does not have any active endpoints
+I0907 14:15:23.228631      12 controller.go:469] backend reload required
+I0907 14:15:23.270210      12 nginx.go:310] NGINX configuration diff
+I0907 14:15:23.270221      12 nginx.go:311] --- /tmp/a522665769	2017-09-07 14:15:23.268596633 +0000
++++ /tmp/b217104500	2017-09-07 14:15:23.268596633 +0000
+@@ -168,11 +168,6 @@
+         least_conn;
+         server 172.17.0.5:8080 max_fails=0 fail_timeout=0;
+     }
+-    upstream default-backend-80 {
+-        # Load balance algorithm; empty for round robin, which is the default
+-        least_conn;
+-        server 172.17.0.4:80 max_fails=0 fail_timeout=0;
+-    }
+     server {
+         server_name _;
+         listen 80 default_server reuseport backlog=511;
+@@ -269,7 +264,7 @@
+         listen [::]:80;
+         set $proxy_upstream_name "-";
+         location / {
+-            set $proxy_upstream_name "default-backend-80";
++            set $proxy_upstream_name "upstream-default-backend";
+ 
+             set $namespace      "default";
+             set $ingress_name   "backend";
+@@ -317,7 +312,7 @@
+ 
+             # In case of errors try the next upstream server before returning an error
+             proxy_next_upstream                     error timeout invalid_header http_502 http_503 http_504;
+-            proxy_pass http://default-backend-80;
++            proxy_pass http://upstream-default-backend;
+         }
+ 
+         fastcgi_param       HTTP_X_Code             503;
+I0907 14:15:23.296305      12 controller.go:478] ingress backend successfully reloaded...
+W0907 14:15:58.938460      12 controller.go:1041] service default/backend does not have any active endpoints
+I0907 14:16:00.349926      12 controller.go:469] backend reload required
+I0907 14:16:00.393070      12 nginx.go:310] NGINX configuration diff
+I0907 14:16:00.393093      12 nginx.go:311] --- /tmp/a001727085	2017-09-07 14:16:00.391596633 +0000
++++ /tmp/b205010664	2017-09-07 14:16:00.391596633 +0000
+@@ -168,6 +168,11 @@
+         least_conn;
+         server 172.17.0.5:8080 max_fails=0 fail_timeout=0;
+     }
++    upstream default-backend-80 {
++        # Load balance algorithm; empty for round robin, which is the default
++        least_conn;
++        server 172.17.0.4:8080 max_fails=0 fail_timeout=0;
++    }
+     server {
+         server_name _;
+         listen 80 default_server reuseport backlog=511;
+@@ -264,7 +269,7 @@
+         listen [::]:80;
+         set $proxy_upstream_name "-";
+         location / {
+-            set $proxy_upstream_name "upstream-default-backend";
++            set $proxy_upstream_name "default-backend-80";
+ 
+             set $namespace      "default";
+             set $ingress_name   "backend";
+@@ -312,7 +317,7 @@
+ 
+             # In case of errors try the next upstream server before returning an error
+             proxy_next_upstream                     error timeout invalid_header http_502 http_503 http_504;
+-            proxy_pass http://upstream-default-backend;
++            proxy_pass http://default-backend-80;
+         }
+ 
+         fastcgi_param       HTTP_X_Code             503;
+I0907 14:16:00.418297      12 controller.go:478] ingress backend successfully reloaded...
+172.17.0.1 - [172.17.0.1] - - [07/Sep/2017:14:16:02 +0000] "GET / HTTP/1.1" 200 956 "-" "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.101 Safari/537.36" 413 0.000 [default-backend-80] 172.17.0.4:8080 940 0.000 200
+172.17.0.1 - [172.17.0.1] - - [07/Sep/2017:14:16:10 +0000] "GET / HTTP/1.1" 404 21 "-" "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.101 Safari/537.36" 388 0.001 [upstream-default-backend] 172.17.0.5:8080 21 0.001 404
+172.17.0.1 - [172.17.0.1] - - [07/Sep/2017:14:16:11 +0000] "GET / HTTP/1.1" 404 21 "-" "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.101 Safari/537.36" 414 0.001 [upstream-default-backend] 172.17.0.5:8080 21 0.001 404
+172.17.0.1 - [172.17.0.1] - - [07/Sep/2017:14:16:11 +0000] "GET / HTTP/1.1" 404 21 "-" "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.101 Safari/537.36" 414 0.000 [upstream-default-backend] 172.17.0.5:8080 21 0.000 404
+172.17.0.1 - [172.17.0.1] - - [07/Sep/2017:14:16:12 +0000] "GET / HTTP/1.1" 200 956 "-" "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.101 Safari/537.36" 413 0.001 [default-backend-80] 172.17.0.4:8080 940 0.001 200
+172.17.0.1 - [172.17.0.1] - - [07/Sep/2017:14:16:12 +0000] "GET / HTTP/1.1" 200 956 "-" "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.101 Safari/537.36" 413 0.001 [default-backend-80] 172.17.0.4:8080 940 0.001 200
+172.17.0.1 - [172.17.0.1] - - [07/Sep/2017:14:16:13 +0000] "GET / HTTP/1.1" 404 21 "-" "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.101 Safari/537.36" 414 0.000 [upstream-default-backend] 172.17.0.5:8080 21 0.000 404
+172.17.0.1 - [172.17.0.1] - - [07/Sep/2017:14:16:14 +0000] "GET / HTTP/1.1" 404 21 "-" "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.101 Safari/537.36" 414 0.000 [upstream-default-backend] 172.17.0.5:8080 21 0.000 404
+172.17.0.1 - [172.17.0.1] - - [07/Sep/2017:14:16:14 +0000] "GET / HTTP/1.1" 404 21 "-" "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.101 Safari/537.36" 414 0.000 [upstream-default-backend] 172.17.0.5:8080 21 0.000 404
+172.17.0.1 - [172.17.0.1] - - [07/Sep/2017:14:16:14 +0000] "GET / HTTP/1.1" 404 21 "-" "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.101 Safari/537.36" 414 0.000 [upstream-default-backend] 172.17.0.5:8080 21 0.000 404
+172.17.0.1 - [172.17.0.1] - - [07/Sep/2017:14:16:15 +0000] "GET / HTTP/1.1" 404 21 "-" "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.101 Safari/537.36" 414 0.000 [upstream-default-backend] 172.17.0.5:8080 21 0.000 404
+172.17.0.1 - [172.17.0.1] - - [07/Sep/2017:14:16:15 +0000] "GET / HTTP/1.1" 404 21 "-" "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.101 Safari/537.36" 414 0.000 [upstream-default-backend] 172.17.0.5:8080 21 0.000 404
+172.17.0.1 - [172.17.0.1] - - [07/Sep/2017:14:16:15 +0000] "GET / HTTP/1.1" 404 21 "-" "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.101 Safari/537.36" 414 0.001 [upstream-default-backend] 172.17.0.5:8080 21 0.001 404
+172.17.0.1 - [172.17.0.1] - - [07/Sep/2017:14:16:15 +0000] "GET / HTTP/1.1" 404 21 "-" "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.101 Safari/537.36" 414 0.001 [upstream-default-backend] 172.17.0.5:8080 21 0.001 404
