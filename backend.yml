@@ -1,0 +1,48 @@
+kind: Deployment
+apiVersion: extensions/v1beta1
+metadata:
+  name: backend
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+      - name: backend
+        image: gcr.io/google_containers/echoserver:1.4
+        imagePullPolicy: Always
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8080
+        ports:
+        - containerPort: 8080
+          protocol: TCP
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: backend
+spec:
+  ports:
+  - port: 80
+    targetPort: 8080
+  selector:
+    app: backend
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: backend
+spec:
+  rules:
+  - host: backend.local
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: backend
+          servicePort: 80
