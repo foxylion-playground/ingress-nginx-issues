@@ -14,7 +14,7 @@ spec:
       terminationGracePeriodSeconds: 60
       containers:
       - name: default-http-backend
-        image: nginx
+        image: foxylion/temp:ingress-default-backend-beta.12-issues
         livenessProbe:
           httpGet:
             path: /

@@ -12,7 +12,7 @@ spec:
       terminationGracePeriodSeconds: 30
       containers:
       - name: backend
-        image: foxylion/httpstatuscode
+        image: foxylion/temp:backend-beta.12-issues
         imagePullPolicy: Always
         livenessProbe:
           httpGet:
