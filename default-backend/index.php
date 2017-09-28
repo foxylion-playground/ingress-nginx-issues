@@ -1,4 +1,12 @@
 <?php
-echo "<h1>Default backend</h1><pre>";
-var_dump($_SERVER);
-echo "</pre>";
+
+$code = isset($_SERVER['HTTP_X_CODE'];) ? $_SERVER['HTTP_X_CODE']; : 200;
+http_response_code($code);
+
+echo "Custom default backend";
+echo "Returning error code " . $code . "\n";
+
+echo "Headers:\n";
+var_dump(getallheaders());
+
+?>
