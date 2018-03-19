@@ -15,13 +15,6 @@ spec:
       containers:
       - name: default-http-backend
         image: foxylion/temp:ingress-default-backend-beta.12-issues
-        livenessProbe:
-          httpGet:
-            path: /
-            port: 80
-            scheme: HTTP
-          initialDelaySeconds: 30
-          timeoutSeconds: 5
         ports:
         - containerPort: 80
 ---
